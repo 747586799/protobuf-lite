@@ -43,7 +43,45 @@ namespace Google.Protobuf
         /// </summary>
         private readonly byte[] bufferArr;
 
-        private readonly ReadOnlyMemory<byte> buffer;
+        private readonly MemoryHolder buffer;
+        internal unsafe struct MemoryHolder
+        {
+            void* pointer;
+            int length;
+            bool isPointer;
+            byte[] buffer;
+
+            public MemoryHolder(byte[] buffer)
+            {
+                this.buffer = buffer;
+                pointer = null;
+                isPointer = false;
+                length = 0;
+            }
+
+            public MemoryHolder(void* pointer, int length)
+            {
+                this.buffer = null;
+                this.length = length;
+                this.pointer = pointer;
+                isPointer = true;
+            }
+
+            public int Length => isPointer ? length : buffer.Length;
+
+            public ReadOnlySpan<byte> Span
+            {
+                get
+                {
+                    if (isPointer)
+                    {
+                        return new ReadOnlySpan<byte>(pointer, length);
+                    }
+                    else
+                        return new ReadOnlySpan<byte>(buffer);
+                }
+            }
+        }
         /// <summary>
         /// The stream to read further input from, or null if the byte array buffer was provided
         /// directly on construction, with no further data available.
@@ -73,12 +111,12 @@ namespace Google.Protobuf
         /// <summary>
         /// Creates a new CodedInputStream reading data from the given byte array.
         /// </summary>
-        /// <param name="buffer"></param>
-        public CodedInputStream(ReadOnlyMemory<byte> buffer)
+        /// <param ptr="buffer"></param>
+        public unsafe CodedInputStream(void* ptr, int length)
         {
             this.input = null;
             this.bufferArr = null;
-            this.buffer = buffer;
+            this.buffer = new MemoryHolder(ptr,length);
             this.state.bufferPos = 0;
             this.state.bufferSize = buffer.Length;
             this.state.sizeLimit = DefaultSizeLimit;
@@ -134,7 +172,7 @@ namespace Google.Protobuf
         {
             this.input = input;
             this.bufferArr = buffer;
-            this.buffer = this.bufferArr;
+            this.buffer = new MemoryHolder(bufferArr);
             this.state.bufferPos = bufferPos;
             this.state.bufferSize = bufferSize;
             this.state.sizeLimit = DefaultSizeLimit;
@@ -254,7 +292,7 @@ namespace Google.Protobuf
             set { state.ExtensionRegistry = value; }
         }
         */
-        internal ReadOnlyMemory<byte> InternalBufferMemory => buffer;
+        internal MemoryHolder InternalBufferMemory => buffer;
 
         internal byte[] InternalBuffer => bufferArr;
 
